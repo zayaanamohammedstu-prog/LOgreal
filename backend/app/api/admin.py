@@ -9,7 +9,8 @@ from ..models.registration_request import RegistrationRequest, RegistrationStatu
 from ..services.audit_service import log_action
 from ..services.email_service import send_approval_email
 from ..utils.decorators import min_role_required
-from ..services.auth_service import _create_user_from_request
+from ..utils.helpers import has_min_role
+from ..services.auth_service import create_user_from_request
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -26,8 +27,7 @@ def _require_min_role(min_role: UserRole):
     user = User.query.get(uid)
     if not user or not user.is_active or not user.is_approved:
         return None, (jsonify({"error": "Access denied."}), 403)
-    role_rank = {UserRole.viewer: 1, UserRole.auditor: 2, UserRole.admin: 3, UserRole.superadmin: 4}
-    if role_rank.get(user.role, 0) < role_rank.get(min_role, 0):
+    if not has_min_role(user.role, min_role):
         return None, (jsonify({"error": "Insufficient permissions."}), 403)
     return user, None
 
@@ -80,7 +80,7 @@ def approve_registration(reg_id: int):
     reg.review_note = data.get("note")
     reg.reviewed_at = datetime.now(timezone.utc)
 
-    user = _create_user_from_request(reg)
+    user = create_user_from_request(reg)
     db.session.commit()
 
     send_approval_email(reg.email, reg.username, approved=True, note=reg.review_note)
@@ -164,8 +164,7 @@ def update_user(user_id: int):
 
     # Superadmin-only: role changes
     if "role" in data:
-        role_rank = {UserRole.viewer: 1, UserRole.auditor: 2, UserRole.admin: 3, UserRole.superadmin: 4}
-        if role_rank.get(current_user.role, 0) < role_rank.get(UserRole.superadmin, 0):
+        if not has_min_role(current_user.role, UserRole.superadmin):
             return jsonify({"error": "Only superadmin can change roles."}), 403
         try:
             user.role = UserRole(data["role"])

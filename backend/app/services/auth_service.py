@@ -96,7 +96,7 @@ def verify_registration_otp(data: dict) -> tuple[dict, int]:
         reg.status = RegistrationStatus.approved
         db.session.add(reg)
         db.session.flush()
-        user = _create_user_from_request(reg)
+        user = create_user_from_request(reg)
         db.session.commit()
         log_action("user_registered", resource="user", resource_id=user.id,
                    details={"email": email, "role": role})
@@ -112,7 +112,7 @@ def verify_registration_otp(data: dict) -> tuple[dict, int]:
         }, 201
 
 
-def _create_user_from_request(reg: RegistrationRequest) -> User:
+def create_user_from_request(reg: RegistrationRequest) -> User:
     user = User(
         email=reg.email,
         username=reg.username,

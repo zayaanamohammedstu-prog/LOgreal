@@ -5,6 +5,7 @@ from ..models.user import User, UserRole
 from ..models.audit_log import AuditLog, LogStatus
 from ..models.registration_request import RegistrationRequest, RegistrationStatus
 from ..models.report import Report
+from ..utils.helpers import has_min_role
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -48,8 +49,8 @@ def auditor_dashboard():
     if err:
         return err
 
-    role_rank = {UserRole.viewer: 1, UserRole.auditor: 2, UserRole.admin: 3, UserRole.superadmin: 4}
-    if role_rank.get(user.role, 0) < role_rank[UserRole.auditor]:
+    
+    if not has_min_role(user.role, UserRole.auditor):
         return jsonify({"error": "Insufficient permissions."}), 403
 
     total_logs = AuditLog.query.count()
@@ -85,8 +86,8 @@ def admin_dashboard():
     if err:
         return err
 
-    role_rank = {UserRole.viewer: 1, UserRole.auditor: 2, UserRole.admin: 3, UserRole.superadmin: 4}
-    if role_rank.get(user.role, 0) < role_rank[UserRole.admin]:
+    
+    if not has_min_role(user.role, UserRole.admin):
         return jsonify({"error": "Insufficient permissions."}), 403
 
     total_users = User.query.count()

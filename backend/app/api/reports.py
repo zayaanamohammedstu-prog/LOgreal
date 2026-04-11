@@ -9,6 +9,7 @@ from ..services.report_service import generate_report
 from ..services.email_service import send_report_email
 from ..services.whatsapp_service import send_whatsapp_report
 from ..services.audit_service import log_action
+from ..utils.helpers import has_min_role, confine_to_reports_dir
 
 reports_bp = Blueprint("reports", __name__)
 
@@ -25,11 +26,6 @@ def _get_current_user() -> tuple[User | None, tuple | None]:
     return user, None
 
 
-def _min_role_rank(user: User, min_role: UserRole) -> bool:
-    role_rank = {UserRole.viewer: 1, UserRole.auditor: 2, UserRole.admin: 3, UserRole.superadmin: 4}
-    return role_rank.get(user.role, 0) >= role_rank.get(min_role, 0)
-
-
 # ── Generate ───────────────────────────────────────────────────────────────────
 
 @reports_bp.post("/generate")
@@ -39,7 +35,7 @@ def generate():
     if err:
         return err
 
-    if not _min_role_rank(user, UserRole.auditor):
+    if not has_min_role(user.role, UserRole.auditor):
         return jsonify({"error": "Auditor role or higher required."}), 403
 
     data = _json_body()
@@ -59,8 +55,8 @@ def generate():
             generated_by_id=user.id,
             parameters=parameters,
         )
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
+    except ValueError:
+        return jsonify({"error": "Invalid report_type or format. Valid types: audit_logs, users. Valid formats: pdf, excel, csv."}), 400
     except Exception as exc:
         current_app.logger.error(f"Report generation error: {exc}", exc_info=True)
         return jsonify({"error": "Report generation failed. Please try again."}), 500
@@ -84,7 +80,7 @@ def list_reports():
 
     query = Report.query
     # Non-admin users only see their own reports
-    if not _min_role_rank(user, UserRole.admin):
+    if not has_min_role(user.role, UserRole.admin):
         query = query.filter_by(generated_by=user.id)
 
     paginated = query.order_by(Report.created_at.desc()).paginate(
@@ -110,16 +106,15 @@ def download_report(report_id: int):
     report = Report.query.get_or_404(report_id)
 
     # Users can only download their own reports unless admin+
-    if report.generated_by != user.id and not _min_role_rank(user, UserRole.admin):
+    if report.generated_by != user.id and not has_min_role(user.role, UserRole.admin):
         return jsonify({"error": "Access denied."}), 403
 
     if not report.file_path or not os.path.exists(report.file_path):
         return jsonify({"error": "Report file not found."}), 404
 
-    # Prevent path traversal: ensure file is within the configured reports directory
-    reports_dir = os.path.realpath(current_app.config.get("REPORTS_DIR", "reports"))
-    resolved_path = os.path.realpath(report.file_path)
-    if not resolved_path.startswith(reports_dir + os.sep):
+    try:
+        resolved_path = confine_to_reports_dir(report.file_path)
+    except ValueError:
         return jsonify({"error": "Access denied."}), 403
 
     log_action("report_downloaded", user_id=user.id, resource="report", resource_id=report_id)
@@ -140,7 +135,7 @@ def send_email(report_id: int):
         return err
 
     report = Report.query.get_or_404(report_id)
-    if report.generated_by != user.id and not _min_role_rank(user, UserRole.admin):
+    if report.generated_by != user.id and not has_min_role(user.role, UserRole.admin):
         return jsonify({"error": "Access denied."}), 403
 
     data = _json_body()
@@ -149,9 +144,9 @@ def send_email(report_id: int):
     if not report.file_path or not os.path.exists(report.file_path):
         return jsonify({"error": "Report file not found."}), 404
 
-    reports_dir = os.path.realpath(current_app.config.get("REPORTS_DIR", "reports"))
-    resolved_path = os.path.realpath(report.file_path)
-    if not resolved_path.startswith(reports_dir + os.sep):
+    try:
+        resolved_path = confine_to_reports_dir(report.file_path)
+    except ValueError:
         return jsonify({"error": "Access denied."}), 403
 
     success = send_report_email(
@@ -177,7 +172,7 @@ def send_whatsapp(report_id: int):
         return err
 
     report = Report.query.get_or_404(report_id)
-    if report.generated_by != user.id and not _min_role_rank(user, UserRole.admin):
+    if report.generated_by != user.id and not has_min_role(user.role, UserRole.admin):
         return jsonify({"error": "Access denied."}), 403
 
     data = _json_body()

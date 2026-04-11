@@ -31,7 +31,12 @@ def _ip() -> str:
 def register():
     """Step 1: Collect registration info and send OTP."""
     data = _json_body()
-    result, status = auth_service.initiate_registration(data)
+    try:
+        result, status = auth_service.initiate_registration(data)
+    except Exception:
+        from flask import current_app
+        current_app.logger.error("Unexpected error in /register", exc_info=True)
+        return jsonify({"error": "An unexpected error occurred."}), 500
     return jsonify(result), status
 
 

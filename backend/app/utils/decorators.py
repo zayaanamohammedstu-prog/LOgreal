@@ -68,8 +68,11 @@ def audit_log_action(action: str, resource: str = None):
         @wraps(fn)
         def wrapper(*args, **kwargs):
             response = fn(*args, **kwargs)
-            status_code = response[1] if isinstance(response, tuple) else 200
-            status = "success" if status_code < 400 else "failure"
+            if isinstance(response, tuple) and len(response) >= 2:
+                status_code = response[1]
+            else:
+                status_code = 200
+            status = "success" if isinstance(status_code, int) and status_code < 400 else "failure"
 
             user_id = None
             try:
