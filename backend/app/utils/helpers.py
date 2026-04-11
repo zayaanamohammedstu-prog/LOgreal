@@ -23,6 +23,11 @@ def confine_to_reports_dir(file_path: str) -> str:
     """
     reports_dir = os.path.realpath(current_app.config.get("REPORTS_DIR", "reports"))
     resolved = os.path.realpath(file_path)
-    if not resolved.startswith(reports_dir + os.sep):
+    try:
+        common = os.path.commonpath([reports_dir, resolved])
+    except ValueError:
+        # On Windows, commonpath raises ValueError for paths on different drives
+        raise ValueError("File path is outside the reports directory.")
+    if common != reports_dir:
         raise ValueError("File path is outside the reports directory.")
     return resolved

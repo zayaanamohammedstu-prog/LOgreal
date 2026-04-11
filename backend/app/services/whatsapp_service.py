@@ -39,5 +39,5 @@ def send_whatsapp_report(
         message = client.messages.create(**msg_kwargs)
         return True, message.sid
     except Exception as exc:
-        current_app.logger.error(f"WhatsApp send failed: {exc}")
-        return False, str(exc)
+        current_app.logger.error(f"WhatsApp send failed: {exc}", exc_info=True)
+        return False, "WhatsApp delivery failed."

@@ -94,7 +94,10 @@ def _generate_excel(title: str, headers: list, rows: list, file_path: str) -> No
 # ── CSV ────────────────────────────────────────────────────────────────────────
 
 def _generate_csv(headers: list, rows: list, file_path: str) -> None:
-    with open(file_path, "w", newline="", encoding="utf-8") as f:
+    # Confine to reports directory to prevent path traversal
+    from ..utils.helpers import confine_to_reports_dir
+    safe_path = confine_to_reports_dir(file_path)
+    with open(safe_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(headers)
         writer.writerows(rows)

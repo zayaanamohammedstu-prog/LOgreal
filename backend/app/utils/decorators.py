@@ -3,14 +3,7 @@ from flask import request, g
 from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 from ..models.user import User, UserRole
 from ..services.audit_service import log_action
-
-
-ROLE_HIERARCHY = {
-    UserRole.viewer: 1,
-    UserRole.auditor: 2,
-    UserRole.admin: 3,
-    UserRole.superadmin: 4,
-}
+from .helpers import has_min_role
 
 
 def role_required(*roles: UserRole):
@@ -50,7 +43,7 @@ def min_role_required(min_role: UserRole):
             if not user or not user.is_active or not user.is_approved:
                 return {"error": "Access denied. Account inactive or not approved."}, 403
 
-            if ROLE_HIERARCHY.get(user.role, 0) < ROLE_HIERARCHY.get(min_role, 0):
+            if not has_min_role(user.role, min_role):
                 return {"error": "Insufficient permissions."}, 403
 
             g.current_user = user
@@ -68,11 +61,12 @@ def audit_log_action(action: str, resource: str = None):
         @wraps(fn)
         def wrapper(*args, **kwargs):
             response = fn(*args, **kwargs)
-            if isinstance(response, tuple) and len(response) >= 2:
+            # Safely extract status code — handle Response objects and variable-length tuples
+            if isinstance(response, tuple) and len(response) >= 2 and isinstance(response[1], int):
                 status_code = response[1]
             else:
                 status_code = 200
-            status = "success" if isinstance(status_code, int) and status_code < 400 else "failure"
+            status = "success" if status_code < 400 else "failure"
 
             user_id = None
             try:
