@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from ..models.user import User, UserRole
-from ..models.audit_log import AuditLog
+from ..models.audit_log import AuditLog, LogStatus
 from ..models.registration_request import RegistrationRequest, RegistrationStatus
 from ..models.report import Report
 
@@ -53,7 +53,7 @@ def auditor_dashboard():
         return jsonify({"error": "Insufficient permissions."}), 403
 
     total_logs = AuditLog.query.count()
-    failed_events = AuditLog.query.filter_by(status="failure").count()
+    failed_events = AuditLog.query.filter_by(status=LogStatus.failure).count()
     recent_logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).limit(20).all()
 
     # Action breakdown

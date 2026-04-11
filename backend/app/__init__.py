@@ -1,5 +1,5 @@
 import os
-from flask import Flask
+from flask import Flask, jsonify
 from .config import get_config
 from .extensions import db, migrate, jwt, mail, bcrypt, limiter, socketio, cors
 
@@ -13,6 +13,7 @@ def create_app(config_class=None) -> Flask:
 
     _init_extensions(app)
     _register_blueprints(app)
+    _register_error_handlers(app)
     _ensure_dirs(app)
 
     return app
@@ -47,6 +48,38 @@ def _init_extensions(app: Flask) -> None:
 def _register_blueprints(app: Flask) -> None:
     from .api import register_blueprints
     register_blueprints(app)
+
+
+def _register_error_handlers(app: Flask) -> None:
+    @app.errorhandler(400)
+    def bad_request(e):
+        return jsonify({"error": "Bad request."}), 400
+
+    @app.errorhandler(401)
+    def unauthorized(e):
+        return jsonify({"error": "Authentication required."}), 401
+
+    @app.errorhandler(403)
+    def forbidden(e):
+        return jsonify({"error": "Access denied."}), 403
+
+    @app.errorhandler(404)
+    def not_found(e):
+        return jsonify({"error": "Resource not found."}), 404
+
+    @app.errorhandler(429)
+    def too_many_requests(e):
+        return jsonify({"error": "Too many requests. Please slow down."}), 429
+
+    @app.errorhandler(500)
+    def internal_error(e):
+        app.logger.error(f"Internal server error: {e}", exc_info=True)
+        return jsonify({"error": "An internal server error occurred."}), 500
+
+    @app.errorhandler(Exception)
+    def unhandled_exception(e):
+        app.logger.error(f"Unhandled exception: {e}", exc_info=True)
+        return jsonify({"error": "An unexpected error occurred."}), 500
 
 
 def _ensure_dirs(app: Flask) -> None:

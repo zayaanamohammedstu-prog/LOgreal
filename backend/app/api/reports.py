@@ -1,5 +1,5 @@
 import os
-from flask import Blueprint, request, jsonify, send_file
+from flask import Blueprint, request, jsonify, send_file, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from ..extensions import db
@@ -62,7 +62,8 @@ def generate():
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
-        return jsonify({"error": f"Report generation failed: {exc}"}), 500
+        current_app.logger.error(f"Report generation error: {exc}", exc_info=True)
+        return jsonify({"error": "Report generation failed. Please try again."}), 500
 
     log_action("report_generated", user_id=user.id, resource="report",
                resource_id=report.id, details={"type": report_type, "format": fmt})
@@ -115,11 +116,17 @@ def download_report(report_id: int):
     if not report.file_path or not os.path.exists(report.file_path):
         return jsonify({"error": "Report file not found."}), 404
 
+    # Prevent path traversal: ensure file is within the configured reports directory
+    reports_dir = os.path.realpath(current_app.config.get("REPORTS_DIR", "reports"))
+    resolved_path = os.path.realpath(report.file_path)
+    if not resolved_path.startswith(reports_dir + os.sep):
+        return jsonify({"error": "Access denied."}), 403
+
     log_action("report_downloaded", user_id=user.id, resource="report", resource_id=report_id)
     return send_file(
-        report.file_path,
+        resolved_path,
         as_attachment=True,
-        download_name=os.path.basename(report.file_path),
+        download_name=os.path.basename(resolved_path),
     )
 
 
@@ -142,10 +149,15 @@ def send_email(report_id: int):
     if not report.file_path or not os.path.exists(report.file_path):
         return jsonify({"error": "Report file not found."}), 404
 
+    reports_dir = os.path.realpath(current_app.config.get("REPORTS_DIR", "reports"))
+    resolved_path = os.path.realpath(report.file_path)
+    if not resolved_path.startswith(reports_dir + os.sep):
+        return jsonify({"error": "Access denied."}), 403
+
     success = send_report_email(
         recipient=recipient,
         report_title=report.title,
-        file_path=report.file_path,
+        file_path=resolved_path,
         generated_at=report.created_at.isoformat() if report.created_at else "",
     )
     if success:
@@ -181,5 +193,6 @@ def send_whatsapp(report_id: int):
     if success:
         log_action("report_whatsapp_sent", user_id=user.id, resource="report",
                    resource_id=report_id, details={"to": to_number, "sid": result})
-        return jsonify({"message": "Report sent via WhatsApp.", "sid": result}), 200
-    return jsonify({"error": f"WhatsApp delivery failed: {result}"}), 500
+        return jsonify({"message": "Report sent via WhatsApp."}), 200
+    current_app.logger.error(f"WhatsApp delivery failed for report {report_id}: {result}")
+    return jsonify({"error": "WhatsApp delivery failed. Please try again."}), 500

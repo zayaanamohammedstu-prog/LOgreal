@@ -94,7 +94,12 @@ def _generate_excel(title: str, headers: list, rows: list, file_path: str) -> No
 # ── CSV ────────────────────────────────────────────────────────────────────────
 
 def _generate_csv(headers: list, rows: list, file_path: str) -> None:
-    with open(file_path, "w", newline="", encoding="utf-8") as f:
+    # Ensure the resolved path stays within the expected reports directory
+    reports_dir = os.path.realpath(_reports_dir())
+    resolved = os.path.realpath(file_path)
+    if not resolved.startswith(reports_dir + os.sep):
+        raise ValueError("Invalid report file path.")
+    with open(resolved, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(headers)
         writer.writerows(rows)

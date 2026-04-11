@@ -1,3 +1,4 @@
+import os
 from flask import current_app, render_template_string
 from flask_mail import Message
 from ..extensions import mail
@@ -134,8 +135,6 @@ def send_report_email(
     file_path: str,
     generated_at: str,
 ) -> bool:
-    from datetime import datetime
-
     html_body = render_template_string(
         REPORT_TEMPLATE,
         title=report_title,
@@ -149,7 +148,6 @@ def send_report_email(
     )
     try:
         with open(file_path, "rb") as f:
-            import os
             msg.attach(
                 filename=os.path.basename(file_path),
                 content_type="application/octet-stream",
